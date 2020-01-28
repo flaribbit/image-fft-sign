@@ -7,23 +7,53 @@
 #include "simple_fft/fft.h"
 using namespace std;
 typedef unsigned char u8;
+typedef complex<double> Complex;
+typedef vector<Complex> Vec;
+typedef vector<Vec> Vec2d;
 void ImageResize(u8 *in,int w1,int h1,u8 *out,int w2,int h2){
     double dx=(double)w1/w2,x,
            dy=(double)h1/h2,y;
     int i,j;
-    for(i=0,x=0;i<w2;i++,x+=dx){
-        for(j=0,y=0;j<h2;j++,y+=dy){
+    int length=w1*h1*4;
+    for(i=0,y=0;i<h2;i++,y+=dy){
+        for(j=0,x=0;j<w2;j++,x+=dx){
             int x0=(int)x,y0=(int)y;
             double rx=x-x0,ry=y-y0;
             double f0=(1-rx)*(1-ry),f1=rx*(1-ry),
                    f2=(1-rx)*ry,    f3=rx*ry;
-            int i0=(y0*w1+x0)<<2,    i1=(y0*w1+x0+1)<<2,
-                i2=((y0+1)*w1+x0)<<2,i3=((y0+1)*w1+x0+1)<<2;
-            u8 *p=out+((j*w2+i)<<2);
-            *p++=(u8)(f0*in[i0++]+f1*in[i1++]+f2*in[i2++]+f3*in[i3++]);
-            *p++=(u8)(f0*in[i0++]+f1*in[i1++]+f2*in[i2++]+f3*in[i3++]);
-            *p++=(u8)(f0*in[i0++]+f1*in[i1++]+f2*in[i2++]+f3*in[i3++]);
-            *p++=(u8)(f0*in[i0++]+f1*in[i1++]+f2*in[i2++]+f3*in[i3++]);
+            u8 *p0=in+((y0*w1+x0)<<2),*p1=p0+4,
+               *p2=p0+(w1<<2),        *p3=p2+4;
+            u8 *p=out+((i*w2+j)<<2);
+            if(p1-in>length)p1=in+length-4;
+            if(p2-in>length)p2=in+length-4;
+            if(p3-in>length)p3=in+length-4;
+            *p++=(u8)(f0**p0+++f1**p1+++f2**p2+++f3**p3++);
+            *p++=(u8)(f0**p0+++f1**p1+++f2**p2+++f3**p3++);
+            *p++=(u8)(f0**p0+++f1**p1+++f2**p2+++f3**p3++);
+            *p++=(u8)(f0**p0+++f1**p1+++f2**p2+++f3**p3++);
+        }
+    }
+}
+
+void ImageChannel(u8 *img,int w,int h,int channel,Vec2d &plane){
+    for(int i=0;i<h;i++){
+        u8 *p=img+i*w*4+channel;
+        Vec row(w);
+        for(int j=0;j<w;j++,p+=4){
+            row[j]=*p;
+        }
+        plane[i]=row;
+    }
+}
+
+void ImageSetChannel(u8 *img,int w,int h,int channel,Vec2d plane){
+    // FILE *fp=fopen("1.txt","w");
+    for(int i=0;i<h;i++){
+        u8 *p=img+i*w*4+channel;
+        Vec row=plane[i];
+        // fprintf(fp,"%lf\n",row[0].real());
+        for(int j=0;j<w;j++,p+=4){
+            *p=(u8)(row[j].real()/751419785.*255);
         }
     }
 }
@@ -31,28 +61,27 @@ void ImageResize(u8 *in,int w1,int h1,u8 *out,int w2,int h2){
 int main(int argc, char const *argv[]){
     u8 *raw;
     unsigned w,h;
-    int error=lodepng_decode32_file(&raw,&w,&h,"0.png");
-    printf("%d,%d",w,h);
+    int r=lodepng_decode32_file(&raw,&w,&h,"0.png");
+    // puts(lodepng_error_text(r));
     u8 *out=(u8*)malloc(2048*2048*4);
+    printf("%d,%d",w,h);
     ImageResize(raw,w,h,out,2048,2048);
-    ImageResize(out,2048,2048,raw,w,h);
-    lodepng_encode32_file("2.png",raw,w,h);
+    r=lodepng_encode32_file("test0.png",out,2048,2048);
+    Vec2d plane(2048);
+    const char *error;
+    ImageChannel(out,2048,2048,0,plane);
+    simple_fft::FFT<Vec2d>(plane,2048,2048,error);
+    ImageSetChannel(out,2048,2048,0,plane);
+
+    ImageChannel(out,2048,2048,1,plane);
+    simple_fft::FFT<Vec2d>(plane,2048,2048,error);
+    ImageSetChannel(out,2048,2048,1,plane);
+
+    ImageChannel(out,2048,2048,2,plane);
+    simple_fft::FFT<Vec2d>(plane,2048,2048,error);
+    ImageSetChannel(out,2048,2048,2,plane);
+
+    lodepng_encode32_file("test1.png",out,2048,2048);
     free(raw);
     free(out);
-}
-
-int main_(int argc, char const *argv[])
-{
-    vector<vector<complex<double> > >x(4096);
-    const char *error;
-    for(int i=0;i<4096;i++){
-        vector<complex<double> >row(4096);
-        for(int j=0;j<4096;j++){
-            row[j]=rand()%100*.01;
-        }
-        x[i]=row;
-    }
-    simple_fft::FFT(x,4096,4096,error);
-    getchar();
-    return 0;
 }
