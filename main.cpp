@@ -47,15 +47,18 @@ void ImageChannel(u8 *img,int w,int h,int channel,Vec2d &plane){
 }
 
 void ImageSetChannel(u8 *img,int w,int h,int channel,Vec2d plane){
-    // FILE *fp=fopen("1.txt","w");
     for(int i=0;i<h;i++){
         u8 *p=img+i*w*4+channel;
         Vec row=plane[i];
-        // fprintf(fp,"%lf\n",row[0].real());
         for(int j=0;j<w;j++,p+=4){
             *p=(u8)(row[j].real()/751419785.*255);
         }
     }
+    FILE *fp=fopen("1.txt","w");
+    for(int i=0;i<2048;i++){
+        fprintf(fp,"%lf\n",fabs(plane[i][i].real()));
+    }
+    fclose(fp);
 }
 
 int main(int argc, char const *argv[]){
@@ -82,6 +85,7 @@ int main(int argc, char const *argv[]){
     ImageSetChannel(out,2048,2048,2,plane);
 
     lodepng_encode32_file("test1.png",out,2048,2048);
+    puts("OK");
     free(raw);
     free(out);
 }
